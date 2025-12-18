@@ -1,6 +1,6 @@
 # GPT-OSS Provider for Context Rot Research
 # Created: 2025-11-19
-# Modified: 2025-11-30 (configurable provider priority, 85% safety margin)
+# Modified: 2025-12-18 (added registry decorator with aliases)
 # Supports: OpenAI GPT-OSS models (gpt-oss-20b, gpt-oss-120b)
 # Provider priority: Configurable via GPT_OSS_PREFER_PROVIDER env var
 # Safety margin: 85% due to tokenizer mismatch (~15% variance vs o200k_base)
@@ -9,7 +9,10 @@ import os
 import litellm
 from typing import Any
 from ..base_provider import BaseProvider
+from ..registry import register
 
+
+@register("gptoss", "ollama", "local", "openrouter")
 class GptOssProvider(BaseProvider):
     """
     Provider for OpenAI's GPT-OSS models.

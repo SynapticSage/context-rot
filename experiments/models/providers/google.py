@@ -1,12 +1,17 @@
+# Google Vertex AI Provider for Context Rot Research
+# Created: 2025-11-19
+# Modified: 2025-12-18 (added registry decorator, removed init param)
+
 import os
 import litellm
 from typing import Any
 from ..base_provider import BaseProvider
+from ..registry import register
 
+
+@register("google", "vertex", "gemini")
 class GoogleProvider(BaseProvider):
-    def __init__(self, model_name: str):
-        self.model_name = model_name
-        super().__init__()
+    """Google Vertex AI provider using LiteLLM."""
 
     def process_single_prompt(self, prompt: str, model_name: str, max_output_tokens: int, index: int) -> tuple[int, str]:
         try:

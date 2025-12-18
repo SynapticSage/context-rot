@@ -1,3 +1,7 @@
+# Repeated Words Experiment Runner
+# Created: 2025-11-19
+# Modified: 2025-12-18 (use provider registry)
+
 import argparse
 import sys
 import os
@@ -8,10 +12,7 @@ import dotenv
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from models.providers.openai import OpenAIProvider
-from models.providers.anthropic import AnthropicProvider
-from models.providers.google import GoogleProvider
-from models.providers.gptoss import GptOssProvider
+from models.registry import get_provider, all_names
 
 dotenv.load_dotenv()
 
@@ -65,7 +66,7 @@ def create_input_df(common_word: str, modified_word: str, model_max_output_token
             prompt = f"Simply replicate the following text, output the exact same text: {variation}"
 
             input_tokens = len(encoding.encode(prompt, disallowed_special=()))
-            
+
             max_output_tokens = input_tokens * 2
 
             if max_output_tokens > model_max_output_tokens:
@@ -80,35 +81,21 @@ def create_input_df(common_word: str, modified_word: str, model_max_output_token
             gold.append(variation)
 
     df = pd.DataFrame({
-        "id": custom_ids, 
-        "prompt": prompts, 
-        "gold": gold, 
-        "token_count": input_tokens_list, 
+        "id": custom_ids,
+        "prompt": prompts,
+        "gold": gold,
+        "token_count": input_tokens_list,
         "max_output_tokens": max_output_tokens_list
     })
 
     return df
 
 
-def get_provider(provider_name: str, model_name: str = None):
-    if provider_name.lower() == 'openai':
-        return OpenAIProvider()
-    elif provider_name.lower() == 'anthropic':
-        return AnthropicProvider()
-    elif provider_name.lower() == 'google':
-        return GoogleProvider(model_name)
-    elif provider_name.lower() == 'gptoss':
-        return GptOssProvider()
-    else:
-        raise ValueError(f"Unknown provider: {provider_name}. Available providers: openai, anthropic, google, gptoss")
-
-
 def main():
     parser = argparse.ArgumentParser(description='Run repeated words experiment')
-    
+
     parser.add_argument('--provider', type=str, required=True,
-                       choices=['openai', 'anthropic', 'google', 'gptoss'],
-                       help='Provider to use')
+                       help=f'Provider to use. Available: {", ".join(all_names())}')
     parser.add_argument('--output-path', type=str, required=True,
                        help='Output path for results')
     parser.add_argument('--model-name', type=str, required=True,
@@ -149,8 +136,9 @@ def main():
         input_path = os.path.join(f"../../data/repeated_words_input_{args.common_word}_{args.modified_word}.csv")
         input_df.to_csv(input_path, index=False)
         print(f"Input data saved to: {input_path}")
-        
-        provider = get_provider(args.provider, args.model_name)
+
+        # Use registry to get provider - supports all registered names and aliases
+        provider = get_provider(args.provider)
 
         print(f"Running {args.provider} provider with {args.model_name}")
         provider.main(
@@ -166,9 +154,9 @@ def main():
             save_every=args.save_every,
             truncate_to_fit=args.truncate_to_fit
         )
-        
+
         print(f"Results saved to: {args.output_path}")
-        
+
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

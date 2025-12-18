@@ -1,9 +1,18 @@
+# OpenAI Provider for Context Rot Research
+# Created: 2025-11-19
+# Modified: 2025-12-18 (added registry decorator)
+
 import os
 import litellm
 from typing import Any
 from ..base_provider import BaseProvider
+from ..registry import register
 
+
+@register("openai")
 class OpenAIProvider(BaseProvider):
+    """OpenAI API provider using LiteLLM."""
+
     def process_single_prompt(self, prompt: str, model_name: str, max_output_tokens: int, index: int) -> tuple[int, str]:
         try:
             response = litellm.completion(

@@ -10,3 +10,7 @@ google-cloud-aiplatform>=1.95.0
 python-dotenv>=1.0.0
 python-levenshtein>=0.27.1
 litellm>=1.0.0
+# Orchestrator dependencies (added 2025-12-18)
+typer>=0.12.0
+rich>=13.0.0
+pyyaml>=6.0.0

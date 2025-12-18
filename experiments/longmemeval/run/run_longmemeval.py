@@ -1,3 +1,7 @@
+# LongMemEval Experiment Runner
+# Created: 2025-11-19
+# Modified: 2025-12-18 (use provider registry)
+
 import argparse
 import sys
 import os
@@ -5,32 +9,16 @@ import dotenv
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from models.providers.openai import OpenAIProvider
-from models.providers.anthropic import AnthropicProvider
-from models.providers.google import GoogleProvider
-from models.providers.gptoss import GptOssProvider
+from models.registry import get_provider, all_names
 
 dotenv.load_dotenv()
 
-def get_provider(provider_name: str, model_name: str = None):
-    if provider_name.lower() == 'openai':
-        return OpenAIProvider()
-    elif provider_name.lower() == 'anthropic':
-        return AnthropicProvider()
-    elif provider_name.lower() == 'google':
-        return GoogleProvider(model_name)
-    elif provider_name.lower() == 'gptoss':
-        return GptOssProvider()
-    else:
-        raise ValueError(f"Unknown provider: {provider_name}. Available providers: openai, anthropic, google, gptoss")
-
 
 def main():
-    parser = argparse.ArgumentParser(description='Run providers')
-    
+    parser = argparse.ArgumentParser(description='Run LongMemEval experiments')
+
     parser.add_argument('--provider', type=str, required=True,
-                       choices=['openai', 'anthropic', 'google', 'gptoss'],
-                       help='Provider to use')
+                       help=f'Provider to use. Available: {", ".join(all_names())}')
     parser.add_argument('--input-path', type=str, required=True,
                        help='Path to input CSV file')
     parser.add_argument('--output-path', type=str, required=True,
@@ -65,7 +53,8 @@ def main():
         print(f"Test mode: Output redirected to {args.output_path}")
 
     try:
-        provider = get_provider(args.provider, args.model_name)
+        # Use registry to get provider - supports all registered names and aliases
+        provider = get_provider(args.provider)
 
         provider.main(
             input_path=args.input_path,
@@ -80,7 +69,7 @@ def main():
             save_every=args.save_every,
             truncate_to_fit=args.truncate_to_fit
         )
-        
+
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

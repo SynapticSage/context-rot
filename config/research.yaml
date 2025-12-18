@@ -1,0 +1,234 @@
+# Context Rot Research Configuration
+# Created: 2025-12-18
+#
+# This file defines models and experiments for the research workflow.
+# Edit this file to add new models - no code changes required.
+#
+# Usage:
+#   python scripts/orchestrator.py                    # Run all
+#   python scripts/orchestrator.py --models llama-70b # Run specific model
+#   python scripts/orchestrator.py --test             # Test mode
+
+# =============================================================================
+# MODELS
+# =============================================================================
+# Each model defines:
+#   - provider: Which provider class to use (from registry)
+#   - model_name: The model identifier passed to the API
+#   - context_length: Maximum context window in tokens
+#   - rate_limit: Tokens per minute for rate limiting
+#   - safety_margin: Optional override (default from provider)
+#   - enabled: Whether to include in default runs
+
+models:
+  # -------------------------------------------------------------------------
+  # GPT-OSS Models (Primary Research Targets)
+  # -------------------------------------------------------------------------
+  gpt-oss-20b:
+    provider: gptoss
+    model_name: openai/gpt-oss-20b
+    context_length: 131072
+    rate_limit: 200000
+    display_name: "GPT-OSS 20B"
+    description: "21B MoE, 3.6B active params"
+    enabled: true
+
+  gpt-oss-120b:
+    provider: gptoss
+    model_name: openai/gpt-oss-120b
+    context_length: 131072
+    rate_limit: 200000
+    display_name: "GPT-OSS 120B"
+    description: "117B MoE, 5.1B active params"
+    enabled: true
+
+  # -------------------------------------------------------------------------
+  # Example: Ollama Local Models
+  # Uncomment and configure to run local models
+  # -------------------------------------------------------------------------
+  # llama-3.3-70b:
+  #   provider: ollama
+  #   model_name: llama3.3:70b
+  #   context_length: 128000
+  #   rate_limit: 50000
+  #   display_name: "Llama 3.3 70B"
+  #   description: "Local Ollama deployment"
+  #   enabled: false
+  #   env_override:
+  #     GPT_OSS_BASE_URL: "http://localhost:11434/v1"
+  #     GPT_OSS_PREFER_PROVIDER: "local"
+
+  # qwen-2.5-72b:
+  #   provider: ollama
+  #   model_name: qwen2.5:72b
+  #   context_length: 131072
+  #   rate_limit: 50000
+  #   display_name: "Qwen 2.5 72B"
+  #   enabled: false
+
+  # -------------------------------------------------------------------------
+  # Example: OpenAI Models
+  # -------------------------------------------------------------------------
+  # gpt-4-turbo:
+  #   provider: openai
+  #   model_name: gpt-4-turbo-2024-04-09
+  #   context_length: 128000
+  #   rate_limit: 800000
+  #   display_name: "GPT-4 Turbo"
+  #   enabled: false
+
+  # -------------------------------------------------------------------------
+  # Example: Anthropic Models
+  # -------------------------------------------------------------------------
+  # claude-3-opus:
+  #   provider: anthropic
+  #   model_name: claude-3-opus-20240229
+  #   context_length: 200000
+  #   rate_limit: 400000
+  #   display_name: "Claude 3 Opus"
+  #   enabled: false
+
+
+# =============================================================================
+# EXPERIMENTS
+# =============================================================================
+# Each experiment defines:
+#   - enabled: Whether to run this experiment
+#   - input: Input data path(s)
+#   - steps: Ordered list of processing steps
+
+experiments:
+  # -------------------------------------------------------------------------
+  # NIAH Extension (Needle in a Haystack)
+  # -------------------------------------------------------------------------
+  niah:
+    enabled: true
+    display_name: "NIAH Extension"
+    description: "Semantic needle retrieval across context lengths"
+
+    # Data generation (run once, then cached)
+    generate:
+      script: experiments/niah_extension/run/create_haystacks.py
+      args:
+        haystack_folder: data/PaulGrahamEssays
+        needle: "It sometimes surprises people when I tell them I write every week. I was also surprised when my friend from my freshman year History course was doing the same thing, but looking back, I only wish I started earlier."
+        question: "What was the best writing advice I got from my college classmate?"
+        output_folder: data/niah_prompts
+      output_check: data/niah_prompts/niah_prompts_sequential.csv
+
+    # Inference step
+    inference:
+      script: experiments/niah_extension/run/run_niah_extension.py
+      input_path: data/niah_prompts/niah_prompts_sequential.csv
+      input_column: prompt
+      output_column: output
+
+    # Evaluation step
+    evaluation:
+      script: experiments/niah_extension/evaluate/evaluate_niah_extension.py
+      judge_model: gpt-4o-mini-2024-07-18
+      output_column: output
+      question_column: question
+      correct_answer_column: answer
+
+    # Visualization step
+    visualization:
+      script: experiments/niah_extension/evaluate/visualize.py
+      output_suffix: _niah_heatmap.png
+
+  # -------------------------------------------------------------------------
+  # LongMemEval (Conversational QA)
+  # -------------------------------------------------------------------------
+  longmemeval:
+    enabled: true
+    display_name: "LongMemEval"
+    description: "Retrieval+reasoning vs reasoning-only comparison"
+
+    # Two variants: focused (minimal context) and full (113k tokens)
+    variants:
+      focused:
+        input_path: data/cleaned_longmemeval_s_focused.csv
+        input_column: focused_prompt
+      full:
+        input_path: data/cleaned_longmemeval_s_full.csv
+        input_column: full_prompt
+        truncate_to_fit: true  # May need truncation for smaller contexts
+
+    inference:
+      script: experiments/longmemeval/run/run_longmemeval.py
+      output_column: output
+
+    evaluation:
+      script: experiments/longmemeval/evaluate/evaluate_longmemeval.py
+      judge_model: gpt-4o-mini-2024-07-18
+      output_column: output
+      question_column: question
+      correct_answer_column: answer
+
+    visualization:
+      script: experiments/longmemeval/evaluate/visualize.py
+      output_suffix: _longmemeval.png
+
+  # -------------------------------------------------------------------------
+  # Repeated Words
+  # -------------------------------------------------------------------------
+  repeated_words:
+    enabled: true
+    display_name: "Repeated Words"
+    description: "Exact replication with single word modification"
+
+    inference:
+      script: experiments/repeated_words/run/run_repeated_words.py
+      common_word: apple
+      modified_word: apples
+      model_max_output_tokens: 32768
+      # Note: No input_path - generates data internally
+
+    evaluation:
+      script: experiments/repeated_words/evaluate/evaluate_repeated_words.py
+      # Outputs multiple plots to output_dir
+
+
+# =============================================================================
+# SETTINGS
+# =============================================================================
+
+settings:
+  # Output directory for results
+  results_dir: results
+
+  # Data directory
+  data_dir: data
+
+  # Checkpoint/workflow state file
+  state_file: results/.workflow_state.json
+
+  # Default LLM judge model for evaluations
+  default_judge_model: gpt-4o-mini-2024-07-18
+
+  # Checkpoint frequency (save every N rows)
+  save_every: 10
+
+  # Max retries per row before skipping
+  max_retries: 2
+
+  # Sleep between batches (seconds)
+  batch_sleep: 60
+
+
+# =============================================================================
+# TEST MODE OVERRIDES
+# =============================================================================
+# Applied when --test flag is used
+
+test_mode:
+  # Reduced sample counts
+  niah_samples: 60
+  longmemeval_samples: 40
+  repeated_words_samples: 15
+
+  # Lower rate limits for testing
+  rate_limit_multiplier: 0.25
+
+  # Output prefix
+  file_prefix: "test_"
