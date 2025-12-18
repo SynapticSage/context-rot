@@ -12,3 +12,9 @@ experiments/python
 results
 .DS_Store
 python
+__pycache__/
+*.pyc
+.DS_Store
+*.egg-info/
+.env
+venv/
