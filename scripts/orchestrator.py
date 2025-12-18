@@ -98,10 +98,16 @@ class WorkflowState:
         self.state = self._load()
 
     def _load(self) -> dict:
+        default = {"completed": {}, "started_at": None}
         if self.state_file.exists():
             with open(self.state_file) as f:
-                return json.load(f)
-        return {"completed": {}, "started_at": None}
+                loaded = json.load(f)
+            # Merge with defaults to handle partial/legacy state files
+            for key in default:
+                if key not in loaded:
+                    loaded[key] = default[key]
+            return loaded
+        return default
 
     def save(self):
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
