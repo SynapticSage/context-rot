@@ -1,0 +1,18 @@
+{
+  "longmemeval": {
+    "20b": {
+      "focused_inference": true,
+      "full_inference": true,
+      "focused_evaluation": true,
+      "full_evaluation": true,
+      "visualization": true
+    },
+    "120b": {
+      "focused_inference": true,
+      "full_inference": true,
+      "focused_evaluation": true,
+      "full_evaluation": true,
+      "visualization": true
+    }
+  }
+}

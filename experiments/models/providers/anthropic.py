@@ -1,29 +1,37 @@
 import os
-from anthropic import Anthropic
+import litellm
 from typing import Any
 from ..base_provider import BaseProvider
 
 class AnthropicProvider(BaseProvider):
     def process_single_prompt(self, prompt: str, model_name: str, max_output_tokens: int, index: int) -> tuple[int, str]:
-        response = self.client.messages.create(
-            model=model_name,
-            temperature=0,
-            max_tokens=max_output_tokens,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            thinking = {
-                "type": "disabled", # default is disabled, configure to test thinking modes
-            }
-        )
+        try:
+            response = litellm.completion(
+                model=model_name,
+                temperature=0,
+                max_tokens=max_output_tokens,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                api_key=os.getenv("ANTHROPIC_API_KEY")
+            )
 
-        if response.content and len(response.content) > 0:
-            return index, response.content[0].text
-        else:
-            return index, "ERROR_NO_CONTENT"
+            # Track tokens if tracker is available
+            if self.token_tracker:
+                self.token_tracker.track_call(response, model_name)
+
+            if response.choices and len(response.choices) > 0:
+                content = response.choices[0].message.content
+                return index, content
+            else:
+                return index, "ERROR_NO_CONTENT"
+
+        except Exception as e:
+            return index, f"ERROR: {str(e)}"
 
     def get_client(self) -> Any:
-        return Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        # LiteLLM doesn't need a client object - returns None
+        return None

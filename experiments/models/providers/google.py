@@ -1,54 +1,48 @@
-from google.cloud import aiplatform_v1
-from google.cloud.aiplatform_v1.types import (
-    GenerateContentRequest,
-    GenerationConfig,
-    Content,
-    Part
-)
 import os
+import litellm
 from typing import Any
 from ..base_provider import BaseProvider
 
 class GoogleProvider(BaseProvider):
     def __init__(self, model_name: str):
         self.model_name = model_name
-        self.model_path = self.get_model_path(model_name)
         super().__init__()
 
     def process_single_prompt(self, prompt: str, model_name: str, max_output_tokens: int, index: int) -> tuple[int, str]:
-        gen_config = GenerationConfig( # modify this according to the model and thinking budget you want to use
-            temperature=0,
-            thinking_config=GenerationConfig.ThinkingConfig(
-                thinking_budget=0
-            ),
-            max_output_tokens=max_output_tokens
-        )
+        try:
+            # LiteLLM uses vertex_ai/ prefix for Google models
+            litellm_model = f"vertex_ai/{model_name}"
 
-        request = GenerateContentRequest(
-            model=self.model_path,
-            contents=[
-                Content(
-                    role="user",
-                    parts=[Part(text=prompt)]
-                )
-            ],
-            generation_config=gen_config
-        )
-        
-        response = self.client.generate_content(request=request)
-        
-        if response.candidates and len(response.candidates) > 0:
-            if response.candidates[0].content.parts[0].text == "":
-                print(response)
-            return index, response.candidates[0].content.parts[0].text
-        else:
-            return index, "ERROR_NO_CONTENT"
-            
+            response = litellm.completion(
+                model=litellm_model,
+                temperature=0,
+                max_tokens=max_output_tokens,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                vertex_project=os.getenv("VERTEX_PROJECT"),
+                vertex_location=os.getenv("VERTEX_LOCATION", "us-central1")
+            )
+
+            # Track tokens if tracker is available
+            if self.token_tracker:
+                self.token_tracker.track_call(response, model_name)
+
+            if response.choices and len(response.choices) > 0:
+                content = response.choices[0].message.content
+                if content == "":
+                    print(response)
+                return index, content
+            else:
+                return index, "ERROR_NO_CONTENT"
+
+        except Exception as e:
+            return index, f"ERROR: {str(e)}"
 
     def get_client(self) -> Any:
-        return aiplatform_v1.PredictionServiceClient()
-        # this requires GOOGLE_APPLICATION_CREDENTIALS in your environment: export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service-account-key.json"
-    
-    def get_model_path(self, model_name: str) -> str:
-        PATH = os.getenv("GOOGLE_MODEL_PATH")
-        return PATH + model_name
+        # LiteLLM doesn't need a client object - returns None
+        # Note: Requires GOOGLE_APPLICATION_CREDENTIALS environment variable
+        return None

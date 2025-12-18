@@ -1,2 +1,14 @@
 .env
 venv/
+data/PaulGrahamEssays
+data
+experiments/models/providers/__pycache__
+experiments/niah_extension/results
+experiments/niah_extension/.DS_Store
+experiments/niah_extension/python
+experiments/repeated_words/results/.workflow_state.json
+experiments/.DS_Store
+experiments/python
+results
+.DS_Store
+python

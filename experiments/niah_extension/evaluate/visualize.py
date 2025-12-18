@@ -9,6 +9,19 @@ import os
 import sys
 from typing import Optional, Tuple
 
+
+def bootstrap_ci(data: np.ndarray, n_bootstrap: int = 200, ci: float = 0.95) -> tuple:
+    """Calculate bootstrap confidence interval for the mean."""
+    if len(data) == 0:
+        return (0.0, 0.0)
+    rng = np.random.default_rng(42)
+    bootstrap_means = [np.mean(rng.choice(data, size=len(data), replace=True))
+                      for _ in range(n_bootstrap)]
+    lower = np.percentile(bootstrap_means, (1 - ci) / 2 * 100)
+    upper = np.percentile(bootstrap_means, (1 + ci) / 2 * 100)
+    return lower, upper
+
+
 def create_niah_heatmap(csv_path: str, 
                        title: Optional[str] = None,
                        output_path: Optional[str] = None,
@@ -70,15 +83,23 @@ def create_niah_heatmap(csv_path: str,
     plt.ylabel('Needle Depth (%)')
     plt.tight_layout()
     
+    # Calculate overall accuracy with bootstrap CI
+    overall_accuracy = df['accuracy'].mean()
+    ci_lower, ci_upper = bootstrap_ci(df['accuracy'].values)
+
+    # Add CI annotation to plot
+    plt.figtext(0.99, 0.01,
+               f"Overall: {overall_accuracy:.1%} [95% CI: {ci_lower:.1%}-{ci_upper:.1%}], n={len(df)}",
+               ha='right', fontsize=9, style='italic')
+
     if output_path:
         plt.savefig(output_path, dpi=100, bbox_inches='tight', facecolor='white')
         print(f"Heatmap saved to: {output_path}")
     plt.close()
-    
-    overall_accuracy = df['accuracy'].mean()
-    print(f"\nOverall Accuracy: {overall_accuracy:.3f}")
+
+    print(f"\nOverall Accuracy: {overall_accuracy:.3f} [95% CI: {ci_lower:.3f}-{ci_upper:.3f}]")
     print(f"Total Samples: {len(df)}")
-    
+
     return df
 
  

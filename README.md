@@ -30,7 +30,52 @@ Each experiment contains detailed instructions in their respective `README.md` f
 
 Datasets can be downloaded [here](https://drive.google.com/drive/folders/1FuOysriSotnYasJUbZJzn31SWt85_3yf?usp=drive_link).
 
+See [`docs/DATASETS.md`](docs/DATASETS.md) for detailed information about datasets, sizes (~400 MB total), and download links.
+
 ## Quick Start
+
+### Option 1: Test Mode (Recommended for First-Time Users)
+
+Validate your setup in 10-20 minutes with reduced samples:
+
+```bash
+# 1. Setup
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 2. Configure environment
+cp .env.example .env
+nano .env  # Add your API keys
+
+# 3. Run test workflow
+./scripts/run_full_research.sh -t
+```
+
+**Test mode runs:**
+- NIAH: 12 samples (vs 88 production)
+- LongMemEval: 40 samples (vs 612 production)
+- Repeated Words: 15 samples (vs ~300 production)
+- **Cost: < $2, Time: 10-20 minutes**
+
+Results are prefixed with `test_` to avoid confusion with production runs.
+
+### Option 2: Full Research Workflow
+
+After validating with test mode, run the complete research:
+
+```bash
+./scripts/run_full_research.sh
+```
+
+**Token Tracking**: All experiments automatically track token usage in real-time. Monitor live dashboards during execution:
+```bash
+tail -f results/gpt_oss_20b_niah_results_token_dashboard.txt
+```
+
+See [`docs/RUN_GUIDE.md`](docs/RUN_GUIDE.md) for detailed instructions and configuration options.
+
+### Option 3: Manual Execution
 
 1. Clone the repository
 2. Create and activate a virtual environment:
@@ -43,8 +88,18 @@ Datasets can be downloaded [here](https://drive.google.com/drive/folders/1FuOysr
    - **OpenAI**: `OPENAI_API_KEY`
    - **Anthropic**: `ANTHROPIC_API_KEY`
    - **Google**: `GOOGLE_APPLICATION_CREDENTIALS` and `GOOGLE_MODEL_PATH`
+   - **GPT-OSS** (Qwen models): See `.env.example` for configuration options
 
 5. Navigate to specific experiment folder and follow README instructions
+
+## Supported Models
+
+- **OpenAI**: GPT-4, GPT-4 Turbo, GPT-3.5
+- **Anthropic**: Claude 3 family
+- **Google**: Gemini models via Vertex AI
+- **GPT-OSS**: Qwen models (gpt-oss:20b, gpt-oss:120b) via local deployment, OpenRouter, or OpenAI API
+
+See [`CLAUDE.md`](CLAUDE.md) for detailed usage examples with all providers.
 
 ## Citation
 If you find this work useful, please cite our technical report:

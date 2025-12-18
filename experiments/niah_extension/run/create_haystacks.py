@@ -22,19 +22,20 @@ def load_text_files(haystack_folder: str) -> list[str]:
     return texts
 
 
-def build_haystack_sequential(texts: list[str], target_tokens: int, tokenizer) -> str:
+def build_haystack_sequential(texts: list[str], target_tokens: int, tokenizer, start_index: int = 0) -> str:
+    """Build haystack by concatenating texts sequentially from start_index."""
     haystack = ""
-    text_index = 0
-    
+    text_index = start_index
+
     while len(tokenizer.encode(haystack)) < target_tokens:
         next_text = texts[text_index % len(texts)]
         test_haystack = haystack + next_text + "\n\n"
-        
+
         test_tokens = len(tokenizer.encode(test_haystack))
         if test_tokens > target_tokens:
             current_tokens = len(tokenizer.encode(haystack))
             remaining_tokens = target_tokens - current_tokens
-            
+
             if remaining_tokens > 0:
                 text_tokens = tokenizer.encode(next_text + "\n\n")
                 truncated_tokens = text_tokens[:remaining_tokens]
@@ -42,13 +43,14 @@ def build_haystack_sequential(texts: list[str], target_tokens: int, tokenizer) -
             break
         else:
             haystack = test_haystack
-            
+
         text_index += 1
-    
+
     return haystack
 
 
-def build_haystack_shuffled(texts: list[str], target_tokens: int, tokenizer) -> str:
+def build_haystack_shuffled(texts: list[str], target_tokens: int, tokenizer, seed: int = 42) -> str:
+    """Build haystack by shuffling sentences with given seed for reproducibility."""
     all_chunks = []
     for text in texts:
         sentences = [s.strip() for s in text.split('.') if s.strip()]
@@ -58,9 +60,10 @@ def build_haystack_shuffled(texts: list[str], target_tokens: int, tokenizer) -> 
                 'text': sentence_text,
                 'token_count': len(tokenizer.encode(sentence_text))
             })
-    
+
+    rng = random.Random(seed)
     available_chunks = all_chunks.copy()
-    random.shuffle(available_chunks)
+    rng.shuffle(available_chunks)
     
     context_parts = []
     current_tokens = 0
@@ -68,7 +71,7 @@ def build_haystack_shuffled(texts: list[str], target_tokens: int, tokenizer) -> 
     
     while current_tokens < target_tokens:
         if chunk_index >= len(available_chunks):
-            random.shuffle(available_chunks)
+            rng.shuffle(available_chunks)
             chunk_index = 0
         
         chunk = available_chunks[chunk_index]
@@ -151,54 +154,71 @@ def create_niah_prompt(haystack_with_needle: str, retrieval_question: str) -> st
     return system_template
 
 
-def create_haystacks(haystack_folder: str, needle: str, shuffled: bool, output_folder: str, 
-                    question: str, distractors: list[str] = None):
+def create_haystacks(haystack_folder: str, needle: str, shuffled: bool, output_folder: str,
+                    question: str, distractors: list[str] = None, test_mode: bool = False,
+                    trials_per_cell: int = 1):
     os.makedirs(output_folder, exist_ok=True)
     tokenizer = tiktoken.get_encoding("o200k_base")
-    
+
     texts = load_text_files(haystack_folder)
-    
-    input_lengths = [500, 1_000, 5_000, 10_000, 50_000, 100_000, 500_000, 900_000]
-    depths = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+    num_texts = len(texts)
+
+    if test_mode:
+        # Reduced set for testing - 4 lengths × 3 depths = 12 cells
+        input_lengths = [1_000, 10_000, 100_000, 500_000]
+        depths = [0, 50, 100]
+        num_cells = len(input_lengths) * len(depths)
+        print(f"TEST MODE: Generating {num_cells * trials_per_cell} samples ({num_cells} cells × {trials_per_cell} trials)")
+    else:
+        # Full production set - 8 lengths × 11 depths = 88 cells
+        input_lengths = [500, 1_000, 5_000, 10_000, 50_000, 100_000, 500_000, 900_000]
+        depths = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        num_cells = len(input_lengths) * len(depths)
+        print(f"Generating {num_cells * trials_per_cell} samples ({num_cells} cells × {trials_per_cell} trials)")
 
     sample_prompt = create_niah_prompt("SAMPLE_CONTEXT", question)
     overhead_tokens = len(tokenizer.encode(sample_prompt.replace("SAMPLE_CONTEXT", "")))
-    
+
     results = []
-    
+
     print(f"Creating {'shuffled' if shuffled else 'sequential'} prompts...")
     if distractors:
         print(f"Adding {len(distractors)} distractors to haystacks")
-    
+
     for input_length in tqdm(input_lengths, desc="Input lengths"):
         needle_tokens = len(tokenizer.encode(needle))
         available_context_tokens = input_length - overhead_tokens - needle_tokens
-        
+
         if available_context_tokens <= 100:
             print(f"Skipping input length {input_length} - too small for needle and overhead")
             continue
-        
-        if shuffled:
-            base_haystack = build_haystack_shuffled(texts, available_context_tokens, tokenizer)
-        else:
-            base_haystack = build_haystack_sequential(texts, available_context_tokens, tokenizer)
-        
-        for depth in depths:
-            haystack_with_distractors = insert_distractors_randomly(base_haystack, distractors)
-            haystack_with_needle = insert_needle_at_depth(haystack_with_distractors, needle, depth, tokenizer)
-            
-            full_prompt = create_niah_prompt(haystack_with_needle, question)
-            
-            actual_tokens = len(tokenizer.encode(full_prompt))
-            
-            results.append({
-                'token_count': actual_tokens,
-                'approximate_input_length': input_length,
-                'needle_depth': depth,
-                'prompt': full_prompt,
-                'question': question,
-                'answer': needle
-            })
+
+        for trial in range(trials_per_cell):
+            # Vary haystack content per trial using different start positions/seeds
+            if shuffled:
+                seed = 42 + trial * 1000  # Different seed per trial
+                base_haystack = build_haystack_shuffled(texts, available_context_tokens, tokenizer, seed=seed)
+            else:
+                start_index = (trial * num_texts // trials_per_cell) % num_texts  # Spread across corpus
+                base_haystack = build_haystack_sequential(texts, available_context_tokens, tokenizer, start_index=start_index)
+
+            for depth in depths:
+                haystack_with_distractors = insert_distractors_randomly(base_haystack, distractors)
+                haystack_with_needle = insert_needle_at_depth(haystack_with_distractors, needle, depth, tokenizer)
+
+                full_prompt = create_niah_prompt(haystack_with_needle, question)
+
+                actual_tokens = len(tokenizer.encode(full_prompt))
+
+                results.append({
+                    'token_count': actual_tokens,
+                    'approximate_input_length': input_length,
+                    'needle_depth': depth,
+                    'trial': trial,
+                    'prompt': full_prompt,
+                    'question': question,
+                    'answer': needle
+                })
     
     results_df = pd.DataFrame(results)
     mode = "shuffled" if shuffled else "sequential"
@@ -227,7 +247,11 @@ def main():
                        help='Output folder for generated CSV file')
     parser.add_argument('--distractors', type=str, nargs='*', default=None,
                        help='Optional distractor strings to randomly insert into haystacks')
-    
+    parser.add_argument('--test-mode', action='store_true',
+                       help='Generate reduced dataset for testing (12 cells vs 88)')
+    parser.add_argument('--trials-per-cell', type=int, default=5,
+                       help='Number of trials per (length, depth) cell for statistical power (default: 5)')
+
     args = parser.parse_args()
     
     try:
@@ -241,14 +265,16 @@ def main():
             raise ValueError("Question cannot be empty")
         
         distractors = [d.strip() for d in args.distractors if d.strip()] if args.distractors else None
-        
+
         create_haystacks(
             haystack_folder=args.haystack_folder,
             needle=args.needle,
             shuffled=args.shuffled,
             output_folder=args.output_folder,
             question=args.question,
-            distractors=distractors
+            distractors=distractors,
+            test_mode=args.test_mode,
+            trials_per_cell=args.trials_per_cell
         )
         
     except Exception as e:
