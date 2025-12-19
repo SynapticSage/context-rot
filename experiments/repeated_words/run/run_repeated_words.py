@@ -133,7 +133,10 @@ def main():
         print(f"Creating input data for {args.common_word} | {args.modified_word}")
         input_df = create_input_df(args.common_word, args.modified_word, args.model_max_output_tokens, args.test_mode)
 
-        input_path = os.path.join(f"../../data/repeated_words_input_{args.common_word}_{args.modified_word}.csv")
+        # Save input data alongside output file (ensures directory exists)
+        output_dir = os.path.dirname(args.output_path) or "."
+        os.makedirs(output_dir, exist_ok=True)
+        input_path = os.path.join(output_dir, f"repeated_words_input_{args.common_word}_{args.modified_word}.csv")
         input_df.to_csv(input_path, index=False)
         print(f"Input data saved to: {input_path}")
 

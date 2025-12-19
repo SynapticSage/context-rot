@@ -132,9 +132,12 @@ class BaseProvider(ABC):
         return success_count
 
     def main(self, input_path: str, output_path: str, input_column: str, output_column: str, model_name: str, max_context_length: int, max_tokens_per_minute: int, test_mode: bool = False, max_samples: int = None, save_every: int = 10, max_retries: int = 2, truncate_to_fit: bool = False) -> None:
+        # Ensure output directory exists
+        output_dir = os.path.dirname(output_path) or "results"
+        os.makedirs(output_dir, exist_ok=True)
+
         # Initialize token tracker and register with LiteLLM's callback system
         experiment_name = os.path.splitext(os.path.basename(output_path))[0]
-        output_dir = os.path.dirname(output_path) or "results"
         self.token_tracker = LiteLLMTokenTracker(output_dir=output_dir, experiment_name=experiment_name)
         self.token_tracker.register()  # Enable automatic tracking via LiteLLM callbacks
         print(f"Token tracking enabled - Dashboard: {self.token_tracker.dashboard_path}")
