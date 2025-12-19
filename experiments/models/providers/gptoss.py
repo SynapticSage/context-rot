@@ -122,31 +122,43 @@ class GptOssProvider(BaseProvider):
     def _format_model_name(self, model_name: str) -> str:
         """Format model name with appropriate provider prefix for LiteLLM.
 
-        Model name in config: openai/gpt-oss-20b
-        LiteLLM requires provider prefix to route correctly:
-        - OpenAI direct: openai/gpt-oss-20b
-        - OpenRouter: openrouter/openai/gpt-oss-20b
-        - Local ollama: ollama/gpt-oss-20b
+        LiteLLM routing format: {router}/{provider}/{model}
+        Examples:
+        - OpenAI direct: openai/gpt-4
+        - OpenRouter OpenAI: openrouter/openai/gpt-oss-20b
+        - OpenRouter NVIDIA: openrouter/nvidia/nemotron-3-nano-30b-a3b:free
+        - Local ollama: ollama/llama3.3:70b
         """
-        # Strip any existing prefix to get base name
-        base_name = model_name
-        for prefix in ["openai/", "openrouter/", "ollama/"]:
-            if model_name.startswith(prefix):
-                base_name = model_name[len(prefix):]
-                break
+        # Strip openrouter/ prefix if present (we'll add it back if needed)
+        if model_name.startswith("openrouter/"):
+            model_name = model_name[len("openrouter/"):]
+
+        # Check if model already has a provider prefix (e.g., nvidia/, openai/, anthropic/)
+        has_provider_prefix = "/" in model_name and not model_name.startswith("ollama/")
 
         if self.deployment_mode == "openai":
-            # OpenAI direct: LiteLLM needs openai/ prefix to route
+            # OpenAI direct: strip any provider prefix, use openai/
+            base_name = model_name.split("/")[-1] if "/" in model_name else model_name
             return f"openai/{base_name}"
+
         elif self.deployment_mode == "openrouter":
-            # OpenRouter: needs openrouter/openai/ for OpenAI models on OpenRouter
-            return f"openrouter/openai/{base_name}"
+            # OpenRouter: prepend openrouter/ to provider/model
+            # If no provider prefix, assume openai/ for backward compatibility
+            if has_provider_prefix:
+                return f"openrouter/{model_name}"
+            else:
+                return f"openrouter/openai/{model_name}"
+
         elif self.deployment_mode == "local":
             if self._is_ollama():
+                # Ollama: strip any prefix, use ollama/
+                base_name = model_name.split("/")[-1] if "/" in model_name else model_name
                 return f"ollama/{base_name}"
             # For vLLM/TGI with custom base_url
+            base_name = model_name.split("/")[-1] if "/" in model_name else model_name
             return f"openai/{base_name}"
-        return f"openai/{base_name}"
+
+        return f"openai/{model_name}"
 
     def _get_api_base_for_litellm(self) -> str:
         """Get the correct api_base for LiteLLM.
