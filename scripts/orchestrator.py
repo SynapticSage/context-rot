@@ -619,6 +619,62 @@ def list_available(
         console.print("[dim]Could not load provider registry[/dim]")
 
 
+def get_csv_path_for_step(exp: str, model: str, step: str, results_dir: Path) -> Optional[Path]:
+    """Map experiment/model/step to the corresponding CSV file."""
+    model_slug = model.replace("-", "_")
+
+    # Map step names to file patterns
+    if exp == "niah":
+        if step == "inference":
+            return results_dir / f"{model_slug}_niah_results.csv"
+        elif step == "evaluation":
+            return results_dir / f"{model_slug}_niah_evaluated.csv"
+    elif exp == "longmemeval":
+        if step == "focused_inference":
+            return results_dir / f"{model_slug}_longmemeval_focused_results.csv"
+        elif step == "full_inference":
+            return results_dir / f"{model_slug}_longmemeval_full_results.csv"
+        elif step == "focused_evaluation":
+            return results_dir / f"{model_slug}_longmemeval_focused_evaluated.csv"
+        elif step == "full_evaluation":
+            return results_dir / f"{model_slug}_longmemeval_full_evaluated.csv"
+    elif exp == "repeated_words":
+        if step == "inference":
+            return results_dir / f"{model_slug}_repeated_words_apple_apples.csv"
+
+    return None
+
+
+def get_error_stats(csv_path: Path, output_column: str = "output") -> Optional[str]:
+    """Calculate error/empty percentage from a CSV file."""
+    if not csv_path.exists():
+        return None
+
+    try:
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+
+        if output_column not in df.columns:
+            return None
+
+        total = len(df)
+        if total == 0:
+            return "0/0"
+
+        errors = df[output_column].astype(str).str.startswith('ERROR').sum()
+        empty = df[output_column].isna().sum()
+        failed = errors + empty
+
+        if failed == 0:
+            return "[green]0%[/green]"
+
+        pct = (failed / total) * 100
+        color = "red" if pct > 10 else "yellow"
+        return f"[{color}]{failed}/{total} ({pct:.1f}%)[/{color}]"
+    except Exception:
+        return "[dim]?[/dim]"
+
+
 @app.command()
 def status(
     config_file: Path = typer.Option(
@@ -638,6 +694,7 @@ def status(
         return
 
     state = WorkflowState(state_file)
+    results_dir = PROJECT_ROOT / settings["results_dir"]
 
     console.print(Panel(
         f"Started: {state.state.get('started_at', 'Unknown')}\n"
@@ -651,13 +708,19 @@ def status(
     table.add_column("Model")
     table.add_column("Step")
     table.add_column("Status")
+    table.add_column("Errors")
 
     for key, completed in state.state.get("completed", {}).items():
         parts = key.split(":")
         if len(parts) == 3:
             exp, model, step = parts
-            status = "[green]Complete[/green]" if completed else "[yellow]Pending[/yellow]"
-            table.add_row(exp, model, step, status)
+            status_str = "[green]Complete[/green]" if completed else "[yellow]Pending[/yellow]"
+
+            # Get error stats for inference/evaluation steps
+            csv_path = get_csv_path_for_step(exp, model, step, results_dir)
+            error_str = get_error_stats(csv_path) if csv_path else "[dim]-[/dim]"
+
+            table.add_row(exp, model, step, status_str, error_str or "[dim]-[/dim]")
 
     console.print(table)
 
