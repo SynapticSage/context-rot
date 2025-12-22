@@ -55,16 +55,24 @@ def create_niah_heatmap(csv_path: str,
                     heatmap_data.loc[depth, length] = value
     
     plt.figure(figsize=figsize)
-    
-    colors = ['white', '#F28E2B']
-    cmap = ListedColormap(colors)
+
+    # Use continuous colormap to show accuracy gradations (0.0 to 1.0)
+    # White = 0% accuracy, dark orange = 100% accuracy
+    from matplotlib.colors import LinearSegmentedColormap
+    colors = ['white', '#FDEBD0', '#F5B041', '#E67E22', '#D35400']
+    cmap = LinearSegmentedColormap.from_list('accuracy', colors, N=256)
     cmap.set_bad(color='lightgrey')
-    
-    im = plt.imshow(heatmap_data.values, 
-                    cmap=cmap, 
+
+    im = plt.imshow(heatmap_data.values,
+                    cmap=cmap,
                     aspect='auto',
                     vmin=0, vmax=1,
                     origin='lower')
+
+    # Add colorbar to show accuracy scale
+    cbar = plt.colorbar(im, label='Accuracy', shrink=0.8)
+    cbar.set_ticks([0, 0.25, 0.5, 0.75, 1.0])
+    cbar.set_ticklabels(['0%', '25%', '50%', '75%', '100%'])
     
     length_labels = []
     for length in all_input_lengths:
