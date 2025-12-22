@@ -83,10 +83,15 @@ def create_niah_heatmap(csv_path: str,
     
     plt.xticks(range(len(all_input_lengths)), length_labels)
     plt.yticks(range(len(all_needle_depths)), [f"{int(d)}%" for d in all_needle_depths])
-    
+
+    # Calculate trials per bin (samples per cell)
+    trials_per_bin = len(df) // (len(all_input_lengths) * len(all_needle_depths))
+
     if title is None:
         title = f"NIAH Performance - {os.path.basename(csv_path)}"
-    plt.title(title)
+    plt.suptitle(title, fontsize=12, fontweight='bold')
+    plt.title(f"Needle retrieval accuracy by context length and depth (n={trials_per_bin}/bin)",
+              fontsize=10, fontweight='normal', style='italic', pad=10)
     plt.xlabel('Input Length (tokens)')
     plt.ylabel('Needle Depth (%)')
     plt.tight_layout()

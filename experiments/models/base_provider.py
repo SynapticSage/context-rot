@@ -222,9 +222,9 @@ class BaseProvider(ABC):
                         output_df = input_df_filtered.drop(columns=[input_column]).copy()
                         output_df[output_column] = None
 
-                        # Match by token_count + needle_depth (NIAH) or question (LongMemEval)
+                        # Match by token_count + needle_depth + trial (NIAH) or question (LongMemEval)
                         merge_keys = []
-                        for key in ['token_count', 'needle_depth', 'question']:
+                        for key in ['token_count', 'needle_depth', 'trial', 'question']:
                             if key in output_df.columns and key in test_df.columns:
                                 merge_keys.append(key)
 
