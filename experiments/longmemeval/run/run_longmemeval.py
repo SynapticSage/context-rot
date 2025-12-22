@@ -27,8 +27,8 @@ def main():
                        help='Column name containing input prompts')
     parser.add_argument('--output-column', type=str, required=True,
                        help='Column name for output results')
-    parser.add_argument('--model-name', type=str, required=True,
-                       help='Model to run')
+    parser.add_argument('--model', '--model-name', type=str, required=True,
+                       dest='model', help='Model to run')
     parser.add_argument('--max-context-length', type=int, required=True,
                        help='Maximum context length in tokens')
     parser.add_argument('--max-tokens-per-minute', type=int, required=True,
@@ -61,7 +61,7 @@ def main():
             output_path=args.output_path,
             input_column=args.input_column,
             output_column=args.output_column,
-            model_name=args.model_name,
+            model_name=args.model,
             max_context_length=args.max_context_length,
             max_tokens_per_minute=args.max_tokens_per_minute,
             test_mode=args.test_mode,

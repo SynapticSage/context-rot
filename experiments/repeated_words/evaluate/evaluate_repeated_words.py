@@ -264,8 +264,8 @@ def main():
                        help='Common word that was repeated')
     parser.add_argument('--modified-word', type=str, required=True,
                        help='Modified word that was inserted')
-    parser.add_argument('--model-name', type=str, required=True,
-                       help='Model name for plot titles')
+    parser.add_argument('--model', '--model-name', type=str, required=True,
+                       dest='model', help='Model name for plot titles')
     
     args = parser.parse_args()
     
@@ -275,7 +275,7 @@ def main():
             output_dir=args.output_dir,
             common_word=args.common_word,
             modified_word=args.modified_word,
-            model_name=args.model_name
+            model_name=args.model
         )
         
         print(f"Evaluation complete. Results saved to: {args.output_dir}")

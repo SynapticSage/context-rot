@@ -18,3 +18,4 @@ __pycache__/
 *.egg-info/
 .env
 venv/
+experiments/models/__pycache__

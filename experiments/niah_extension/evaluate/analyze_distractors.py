@@ -70,8 +70,8 @@ def main():
                        help='Path to output CSV file')
     parser.add_argument('--visual-path', type=str, required=True,
                        help='Path to visual output file')
-    parser.add_argument('--model-name', type=str, default='gpt-4.1-2025-04-14',
-                       help='Model name to use (default: gpt-4.1-2025-04-14)')
+    parser.add_argument('--model', '--model-name', type=str, default='gpt-4.1-2025-04-14',
+                       dest='model', help='Judge model to use (default: gpt-4.1-2025-04-14)')
     parser.add_argument('--output-column', type=str, default='output',
                        help='Column name containing model outputs (default: output)')
     parser.add_argument('--question-column', type=str, default='question',
@@ -89,7 +89,7 @@ def main():
     try:
         judge = LLMJudge(
             prompt=args.prompt,
-            model_name=args.model_name,
+            model_name=args.model,
             output_column=args.output_column,
             question_column=args.question_column,
             correct_answer_column=args.correct_answer_column,
@@ -103,7 +103,7 @@ def main():
             max_tokens_per_minute=args.max_tokens_per_minute
         )
 
-        create_histogram_for_file(args.output_path, args.visual_path, args.model_name)
+        create_histogram_for_file(args.output_path, args.visual_path, args.model)
         
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

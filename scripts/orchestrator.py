@@ -2,16 +2,19 @@
 """
 Context Rot Research Orchestrator
 Created: 2025-12-18
+Modified: 2025-12-22 (added generate command with datasets.yaml config)
 
 Configuration-driven workflow orchestrator that replaces run_full_research.sh.
 Reads model and experiment definitions from YAML config files.
 
 Usage:
-    python scripts/orchestrator.py                      # Run all enabled
-    python scripts/orchestrator.py --test               # Test mode
-    python scripts/orchestrator.py --models gpt-oss-20b # Specific model
-    python scripts/orchestrator.py --experiments niah   # Specific experiment
-    python scripts/orchestrator.py --list               # Show available models/experiments
+    python scripts/orchestrator.py generate             # Generate all datasets
+    python scripts/orchestrator.py generate niah        # Generate NIAH dataset
+    python scripts/orchestrator.py run                  # Run all enabled experiments
+    python scripts/orchestrator.py run --test           # Test mode
+    python scripts/orchestrator.py run --models gpt-oss-20b
+    python scripts/orchestrator.py list                 # Show available models/experiments
+    python scripts/orchestrator.py full                 # Generate + Run + Evaluate
 """
 
 import os
@@ -45,7 +48,7 @@ console = Console()
 # CONFIGURATION LOADING
 # =============================================================================
 
-def load_config(config_path: Path) -> dict:
+def load_config(config_path: Path, required_sections: list[str] = None) -> dict:
     """Load and validate YAML configuration."""
     if not config_path.exists():
         console.print(f"[red]Config file not found: {config_path}[/red]")
@@ -55,13 +58,21 @@ def load_config(config_path: Path) -> dict:
         config = yaml.safe_load(f)
 
     # Validate required sections
-    required = ["models", "experiments", "settings"]
-    for section in required:
+    if required_sections is None:
+        required_sections = ["models", "experiments", "settings"]
+    for section in required_sections:
         if section not in config:
             console.print(f"[red]Missing required config section: {section}[/red]")
             raise typer.Exit(1)
 
     return config
+
+
+def load_datasets_config(config_path: Path = None) -> dict:
+    """Load datasets.yaml configuration."""
+    if config_path is None:
+        config_path = PROJECT_ROOT / "config" / "datasets.yaml"
+    return load_config(config_path, required_sections=[])
 
 
 def get_enabled_models(config: dict, model_filter: Optional[list[str]] = None) -> dict:
@@ -174,7 +185,7 @@ def build_inference_args(
     """Build command-line arguments for inference script."""
     args = [
         "--provider", model_spec["provider"],
-        "--model-name", model_spec["model_name"],
+        "--model", model_spec["model_name"],
         "--input-path", input_path,
         "--output-path", output_path,
         "--input-column", input_column,
@@ -212,7 +223,7 @@ def build_evaluation_args(
     args = [
         "--input-path", input_path,
         "--output-path", output_path,
-        "--model-name", eval_spec.get("judge_model", settings["default_judge_model"]),
+        "--model", eval_spec.get("judge_model", settings["default_judge_model"]),
     ]
 
     for key in ["output_column", "question_column", "correct_answer_column"]:
@@ -379,7 +390,7 @@ def run_longmemeval_experiment(
         args = [
             "--focused-path", str(focused_path),
             "--full-path", str(full_path),
-            "--model-name", model_spec.get("display_name", model_name),
+            "--model", model_spec.get("display_name", model_name),
             "--output-path", str(output_path)
         ]
 
@@ -413,7 +424,7 @@ def run_repeated_words_experiment(
 
         args = [
             "--provider", model_spec["provider"],
-            "--model-name", model_spec["model_name"],
+            "--model", model_spec["model_name"],
             "--output-path", str(output_path),
             "--common-word", common_word,
             "--modified-word", modified_word,
@@ -441,7 +452,7 @@ def run_repeated_words_experiment(
             "--output-dir", str(output_dir),
             "--common-word", common_word,
             "--modified-word", modified_word,
-            "--model-name", model_spec.get("display_name", model_name)
+            "--model", model_spec.get("display_name", model_name)
         ]
 
         success = run_python_script(eval_spec["script"], args, PROJECT_ROOT)
@@ -450,8 +461,178 @@ def run_repeated_words_experiment(
 
 
 # =============================================================================
+# DATASET GENERATION
+# =============================================================================
+
+def generate_niah_dataset(
+    datasets_config: dict,
+    test_mode: bool = False,
+    force: bool = False
+) -> bool:
+    """Generate NIAH haystacks from datasets.yaml config."""
+    niah = datasets_config.get("niah_extension", {})
+    if not niah:
+        console.print("[yellow]No niah_extension config found in datasets.yaml[/yellow]")
+        return False
+
+    defaults = datasets_config.get("defaults", {})
+    output_dir = PROJECT_ROOT / defaults.get("output_dir", "data") / "niah_prompts"
+
+    # Determine output file and check if exists
+    suffix = "shuffled" if niah.get("shuffled", False) else "sequential"
+    output_file = output_dir / f"niah_prompts_{suffix}.csv"
+
+    if output_file.exists() and not force:
+        console.print(f"[dim]Dataset exists: {output_file.relative_to(PROJECT_ROOT)}[/dim]")
+        console.print("[dim]Use --force to regenerate[/dim]")
+        return True
+
+    # Build arguments from config
+    if test_mode:
+        test_config = niah.get("test", {})
+        trials = test_config.get("trials_per_cell", defaults.get("test_trials_per_cell", 1))
+    else:
+        trials = niah.get("trials_per_cell", defaults.get("trials_per_cell", 5))
+
+    args = [
+        "--haystack-folder", str(PROJECT_ROOT / niah["haystack_folder"]),
+        "--needle", niah["needle"].strip(),
+        "--question", niah["question"],
+        "--output-folder", str(output_dir),
+        "--trials-per-cell", str(trials),
+    ]
+
+    if niah.get("shuffled", False):
+        args.append("--shuffled")
+
+    if niah.get("distractors"):
+        args.append("--distractors")
+        args.extend(niah["distractors"])
+
+    if test_mode:
+        args.append("--test-mode")
+
+    console.print(f"[cyan]Generating NIAH dataset ({trials} trials/cell)...[/cyan]")
+
+    success = run_python_script(
+        "experiments/niah_extension/run/create_haystacks.py",
+        args,
+        PROJECT_ROOT
+    )
+
+    if success:
+        console.print(f"[green]Generated: {output_file.relative_to(PROJECT_ROOT)}[/green]")
+    return success
+
+
+def generate_repeated_words_data(
+    datasets_config: dict,
+    test_mode: bool = False
+) -> dict:
+    """Get repeated words config (data is generated inline during run)."""
+    rw = datasets_config.get("repeated_words", {})
+    return {
+        "common_word": rw.get("common_word", "apple"),
+        "modified_word": rw.get("modified_word", "apples"),
+        "context_lengths": rw.get("context_lengths", [1000, 2000, 4000, 8000, 16000, 32000])
+    }
+
+
+# =============================================================================
 # CLI COMMANDS
 # =============================================================================
+
+@app.command()
+def generate(
+    experiment: Optional[str] = typer.Argument(
+        None,
+        help="Specific experiment to generate data for (niah, longmemeval, repeated_words)"
+    ),
+    config_file: Path = typer.Option(
+        Path("config/datasets.yaml"),
+        "--config", "-c",
+        help="Path to datasets config file"
+    ),
+    test_mode: bool = typer.Option(
+        False,
+        "--test", "-t",
+        help="Generate test-sized datasets"
+    ),
+    trials: Optional[int] = typer.Option(
+        None,
+        "--trials", "-n",
+        help="Override trials per cell (NIAH only)"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force", "-f",
+        help="Regenerate even if data exists"
+    )
+):
+    """Generate experiment datasets from config.
+
+    Examples:
+        orchestrator generate                    # Generate all datasets
+        orchestrator generate niah              # Generate NIAH only
+        orchestrator generate niah --trials 30  # 30 trials per cell
+        orchestrator generate --test            # Test-sized datasets
+    """
+    config_path = PROJECT_ROOT / config_file
+    datasets_config = load_datasets_config(config_path)
+
+    # Override trials if specified
+    if trials and "niah_extension" in datasets_config:
+        datasets_config["niah_extension"]["trials_per_cell"] = trials
+
+    experiments_to_generate = []
+    if experiment:
+        # Map aliases
+        exp_map = {
+            "niah": "niah_extension",
+            "niah_extension": "niah_extension",
+            "longmemeval": "longmemeval",
+            "repeated_words": "repeated_words",
+            "rw": "repeated_words"
+        }
+        if experiment.lower() not in exp_map:
+            console.print(f"[red]Unknown experiment: {experiment}[/red]")
+            console.print(f"Available: {', '.join(exp_map.keys())}")
+            raise typer.Exit(1)
+        experiments_to_generate = [exp_map[experiment.lower()]]
+    else:
+        experiments_to_generate = ["niah_extension", "longmemeval", "repeated_words"]
+
+    console.print(Panel(
+        f"[bold]Dataset Generation[/bold]\n\n"
+        f"Experiments: {', '.join(experiments_to_generate)}\n"
+        f"Test Mode: {test_mode}\n"
+        f"Force: {force}",
+        title="Configuration"
+    ))
+
+    results = {}
+
+    for exp in experiments_to_generate:
+        if exp == "niah_extension":
+            results[exp] = generate_niah_dataset(datasets_config, test_mode, force)
+        elif exp == "longmemeval":
+            console.print("[dim]LongMemEval uses pre-existing data (no generation needed)[/dim]")
+            results[exp] = True
+        elif exp == "repeated_words":
+            console.print("[dim]Repeated Words generates data inline during run[/dim]")
+            rw_config = generate_repeated_words_data(datasets_config, test_mode)
+            console.print(f"[dim]  Words: {rw_config['common_word']} / {rw_config['modified_word']}[/dim]")
+            results[exp] = True
+
+    # Summary
+    all_success = all(results.values())
+    if all_success:
+        console.print("\n[bold green]Dataset generation complete![/bold green]")
+    else:
+        failed = [k for k, v in results.items() if not v]
+        console.print(f"\n[bold red]Some datasets failed: {', '.join(failed)}[/bold red]")
+        raise typer.Exit(1)
+
 
 @app.command()
 def run(
@@ -723,6 +904,153 @@ def status(
             table.add_row(exp, model, step, status_str, error_str or "[dim]-[/dim]")
 
     console.print(table)
+
+
+@app.command()
+def full(
+    research_config: Path = typer.Option(
+        Path("config/research.yaml"),
+        "--research-config",
+        help="Path to research config file"
+    ),
+    datasets_config: Path = typer.Option(
+        Path("config/datasets.yaml"),
+        "--datasets-config",
+        help="Path to datasets config file"
+    ),
+    models: Optional[list[str]] = typer.Option(
+        None,
+        "--models", "-m",
+        help="Specific models to run (can specify multiple)"
+    ),
+    experiments: Optional[list[str]] = typer.Option(
+        None,
+        "--experiments", "-e",
+        help="Specific experiments to run (can specify multiple)"
+    ),
+    test_mode: bool = typer.Option(
+        False,
+        "--test", "-t",
+        help="Run in test mode with reduced samples"
+    ),
+    trials: Optional[int] = typer.Option(
+        None,
+        "--trials", "-n",
+        help="Override trials per cell for NIAH"
+    ),
+    force_regenerate: bool = typer.Option(
+        False,
+        "--force-generate", "-f",
+        help="Force regenerate datasets even if they exist"
+    ),
+    reset_state: bool = typer.Option(
+        False,
+        "--reset",
+        help="Reset workflow state and start fresh"
+    )
+):
+    """Full pipeline: generate datasets + run experiments + evaluate.
+
+    This is the recommended way to run a complete research workflow.
+
+    Examples:
+        orchestrator full                           # Full run, all experiments
+        orchestrator full --test                    # Quick validation
+        orchestrator full --trials 30              # 30 trials per NIAH cell
+        orchestrator full -m gpt-oss-20b -e niah   # Specific model/experiment
+    """
+    console.print(Panel(
+        "[bold]Full Research Pipeline[/bold]\n\n"
+        "Step 1: Generate datasets\n"
+        "Step 2: Run inference\n"
+        "Step 3: Evaluate results\n"
+        "Step 4: Generate visualizations",
+        title="Workflow"
+    ))
+
+    # Step 1: Generate datasets
+    console.print("\n[bold blue]Step 1: Dataset Generation[/bold blue]\n")
+
+    ds_config_path = PROJECT_ROOT / datasets_config
+    ds_config = load_datasets_config(ds_config_path)
+
+    if trials and "niah_extension" in ds_config:
+        ds_config["niah_extension"]["trials_per_cell"] = trials
+
+    # Map experiment filter to dataset names
+    exp_to_dataset = {
+        "niah": "niah_extension",
+        "longmemeval": "longmemeval",
+        "repeated_words": "repeated_words"
+    }
+
+    datasets_to_gen = []
+    if experiments:
+        for exp in experiments:
+            if exp in exp_to_dataset:
+                datasets_to_gen.append(exp_to_dataset[exp])
+    else:
+        datasets_to_gen = list(exp_to_dataset.values())
+
+    for ds in datasets_to_gen:
+        if ds == "niah_extension":
+            generate_niah_dataset(ds_config, test_mode, force_regenerate)
+        elif ds == "longmemeval":
+            console.print("[dim]LongMemEval: Using pre-existing data[/dim]")
+        elif ds == "repeated_words":
+            console.print("[dim]Repeated Words: Data generated inline[/dim]")
+
+    # Step 2-4: Run experiments (uses the run command logic)
+    console.print("\n[bold blue]Step 2-4: Inference, Evaluation, Visualization[/bold blue]\n")
+
+    # Load research config and run
+    config_path = PROJECT_ROOT / research_config
+    config = load_config(config_path)
+    settings = config["settings"]
+
+    # Initialize workflow state
+    state_file = PROJECT_ROOT / settings["state_file"]
+    if reset_state and state_file.exists():
+        state_file.unlink()
+        console.print("[yellow]Workflow state reset[/yellow]")
+
+    state = WorkflowState(state_file)
+    state.start_run()
+
+    enabled_models = get_enabled_models(config, models)
+    enabled_experiments = get_enabled_experiments(config, experiments)
+
+    if not enabled_models:
+        console.print("[red]No models selected[/red]")
+        raise typer.Exit(1)
+
+    if not enabled_experiments:
+        console.print("[red]No experiments selected[/red]")
+        raise typer.Exit(1)
+
+    file_prefix = config.get("test_mode", {}).get("file_prefix", "test_") if test_mode else ""
+
+    for exp_name, exp_spec in enabled_experiments.items():
+        console.print(f"\n[bold blue]{'='*60}[/bold blue]")
+        console.print(f"[bold blue]Experiment: {exp_spec.get('display_name', exp_name)}[/bold blue]")
+        console.print(f"[bold blue]{'='*60}[/bold blue]\n")
+
+        for model_name, model_spec in enabled_models.items():
+            console.print(f"\n[bold cyan]Model: {model_spec.get('display_name', model_name)}[/bold cyan]\n")
+
+            try:
+                if exp_name == "niah":
+                    run_niah_experiment(model_name, model_spec, exp_spec, config, state, test_mode, file_prefix)
+                elif exp_name == "longmemeval":
+                    run_longmemeval_experiment(model_name, model_spec, exp_spec, config, state, test_mode, file_prefix)
+                elif exp_name == "repeated_words":
+                    run_repeated_words_experiment(model_name, model_spec, exp_spec, config, state, test_mode, file_prefix)
+            except Exception as e:
+                console.print(f"[red]Error in {exp_name} for {model_name}: {e}[/red]")
+                continue
+
+    console.print("\n[bold green]Full pipeline complete![/bold green]")
+    console.print(f"Results saved to: {settings['results_dir']}/")
 
 
 if __name__ == "__main__":

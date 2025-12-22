@@ -105,8 +105,8 @@ def main():
                        help='Path to focused results CSV file')
     parser.add_argument('--full-path', type=str, required=True,
                        help='Path to full results CSV file')
-    parser.add_argument('--model-name', type=str, required=True,
-                       help='Model name for plot titles')
+    parser.add_argument('--model', '--model-name', type=str, required=True,
+                       dest='model', help='Model name for plot titles')
     parser.add_argument('--output-path', type=str, required=True,
                        help='Output path for PNG file')
 
@@ -116,7 +116,7 @@ def main():
         visualize_longmemeval_results(
             focused_filepath=args.focused_path,
             full_filepath=args.full_path,
-            model_name=args.model_name,
+            model_name=args.model,
             output_path=args.output_path
         )
         print(f"Visualization saved to: {args.output_path}")

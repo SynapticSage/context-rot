@@ -98,8 +98,8 @@ def main():
                        help=f'Provider to use. Available: {", ".join(all_names())}')
     parser.add_argument('--output-path', type=str, required=True,
                        help='Output path for results')
-    parser.add_argument('--model-name', type=str, required=True,
-                       help='Model to run')
+    parser.add_argument('--model', '--model-name', type=str, required=True,
+                       dest='model', help='Model to run')
     parser.add_argument('--common-word', type=str, required=True,
                        help='Common word to repeat')
     parser.add_argument('--modified-word', type=str, required=True,
@@ -143,13 +143,13 @@ def main():
         # Use registry to get provider - supports all registered names and aliases
         provider = get_provider(args.provider)
 
-        print(f"Running {args.provider} provider with {args.model_name}")
+        print(f"Running {args.provider} provider with {args.model}")
         provider.main(
             input_path=input_path,
             output_path=args.output_path,
             input_column='prompt',
             output_column='output',
-            model_name=args.model_name,
+            model_name=args.model,
             max_context_length=args.max_context_length,
             max_tokens_per_minute=args.max_tokens_per_minute,
             test_mode=args.test_mode,

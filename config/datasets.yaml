@@ -1,0 +1,115 @@
+# Dataset Generation Configuration
+# Created: 2025-12-22
+#
+# This file controls how experiment datasets are generated.
+# Run: python scripts/orchestrator.py generate [experiment]
+#
+# Each experiment can have its own generation parameters.
+# Shared defaults are inherited from the 'defaults' section.
+
+defaults:
+  # Statistical power settings
+  trials_per_cell: 5          # Samples per (length, depth) combination
+  test_trials_per_cell: 1     # Reduced trials for test mode
+
+  # Output location
+  output_dir: data
+
+# ============================================================================
+# NIAH Extension (Needle in a Haystack)
+# ============================================================================
+# Tests: Can the model retrieve a specific "needle" fact buried in long context?
+# Measures: Accuracy across context lengths (1K-128K) and needle depths (0-100%)
+
+niah_extension:
+  # Haystack content (the "distractor" text surrounding the needle)
+  haystack_folder: data/PaulGrahamEssays
+
+  # The needle - a memorable fact to hide in the haystack
+  needle: |
+    It sometimes surprises people when I tell them I write every week.
+    The best advice I ever got about writing came from my college classmate,
+    who told me that the key to good writing is to rewrite, rewrite, rewrite.
+
+  # Question to ask the model (tests if it found the needle)
+  question: "What was the best writing advice I got from my college classmate?"
+
+  # Expected answer (used by LLM judge for evaluation)
+  answer: "The key to good writing is to rewrite, rewrite, rewrite."
+
+  # Generation mode
+  shuffled: false             # true = randomize sentence order (harder)
+
+  # Optional distractors - similar-looking but wrong facts
+  distractors:
+    - "My professor once mentioned that writing is like sculpting with words."
+    - "A famous author said the secret to writing is reading extensively."
+
+  # Statistical power
+  trials_per_cell: 5          # 5 trials × 88 cells = 440 samples
+
+  # Context length grid (tokens)
+  context_lengths: [1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000]
+
+  # Needle depth grid (percentage into document)
+  needle_depths: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+
+  # Test mode settings (quick validation)
+  test:
+    trials_per_cell: 1
+    context_lengths: [1000, 8000, 32000, 128000]
+    needle_depths: [0, 50, 100]
+
+# ============================================================================
+# LongMemEval (Long-term Memory Evaluation)
+# ============================================================================
+# Tests: Retrieval+reasoning in conversational context
+# Compares: Focused (relevant context only) vs Full (113K tokens)
+# Data: Pre-generated, no generation step needed
+
+longmemeval:
+  # Static dataset - no generation needed
+  generate: false
+
+  # Input files (already exist in data/)
+  focused_input: data/cleaned_longmemeval_s_focused.csv
+  full_input: data/cleaned_longmemeval_s_full.csv
+
+  # Column mappings
+  input_columns:
+    focused: focused_prompt
+    full: full_prompt
+  question_column: question
+  answer_column: answer
+
+# ============================================================================
+# Repeated Words
+# ============================================================================
+# Tests: Exact replication of repeated sequences with one modified word
+# Measures: Position accuracy, Levenshtein distance, word count fidelity
+
+repeated_words:
+  # Word pair for the test
+  common_word: apple         # Repeated many times
+  modified_word: apples      # Inserted once (model must find and preserve position)
+
+  # Alternative word pairs (uncomment to use)
+  # common_word: hello
+  # modified_word: jello
+
+  # Context lengths to test (tokens)
+  context_lengths: [1000, 2000, 4000, 8000, 16000, 32000]
+
+  # Note: This experiment generates data internally during run
+  # No separate generation step needed
+  generate: inline
+
+# ============================================================================
+# Evaluation Settings
+# ============================================================================
+evaluation:
+  # LLM judge model (used to score model outputs)
+  judge_model: gpt-4o-2024-11-20
+
+  # Judge prompt style
+  strict_matching: false      # true = exact match, false = semantic similarity
