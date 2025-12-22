@@ -42,6 +42,15 @@ models:
     description: "117B MoE, 5.1B active params"
     enabled: true
 
+  nemotron-3-nano:
+    provider: openrouter
+    model_name: nvidia/nemotron-3-nano-30b-a3b:free
+    context_length: 1000000 # 1M context!
+    rate_limit: 200000
+    display_name: "Nemotron 3 Nano 30B"
+    description: "31.6B MoE, 3.2B active, 1M context"
+    enabled: true
+
   # -------------------------------------------------------------------------
   # Example: Ollama Local Models
   # Uncomment and configure to run local models
@@ -87,7 +96,6 @@ models:
   #   rate_limit: 400000
   #   display_name: "Claude 3 Opus"
   #   enabled: false
-
 
 # =============================================================================
 # EXPERIMENTS
@@ -152,7 +160,7 @@ experiments:
       full:
         input_path: data/cleaned_longmemeval_s_full.csv
         input_column: full_prompt
-        truncate_to_fit: true  # May need truncation for smaller contexts
+        truncate_to_fit: true # May need truncation for smaller contexts
 
     inference:
       script: experiments/longmemeval/run/run_longmemeval.py
@@ -188,7 +196,6 @@ experiments:
       script: experiments/repeated_words/evaluate/evaluate_repeated_words.py
       # Outputs multiple plots to output_dir
 
-
 # =============================================================================
 # SETTINGS
 # =============================================================================
@@ -214,7 +221,6 @@ settings:
 
   # Sleep between batches (seconds)
   batch_sleep: 60
-
 
 # =============================================================================
 # TEST MODE OVERRIDES
