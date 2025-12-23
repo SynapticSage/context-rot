@@ -184,12 +184,16 @@ class TestProcessSinglePrompt:
     @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True)
     def test_handles_empty_content(self, mock_litellm):
         """Test handling of empty response content."""
+        # Create a message mock that doesn't have reasoning_content attr
+        message = MagicMock(spec=['content', 'role'])
+        message.content = ""
+
+        choice = MagicMock()
+        choice.message = message
+        choice.finish_reason = "stop"
+
         response = MagicMock()
-        response.choices = [MagicMock()]
-        response.choices[0].message.content = ""
-        response.choices[0].message.reasoning_content = None
-        response.choices[0].message.tool_calls = None
-        response.choices[0].finish_reason = "stop"
+        response.choices = [choice]
         response.usage = MagicMock()
         response.usage.prompt_tokens = 100
         response.usage.completion_tokens = 0
