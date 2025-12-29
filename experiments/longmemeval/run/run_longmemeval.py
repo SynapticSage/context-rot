@@ -37,6 +37,10 @@ def main():
                        help='Run in test mode with reduced samples')
     parser.add_argument('--max-samples', type=int, default=None,
                        help='Maximum number of samples to process')
+    parser.add_argument('--shuffle-samples', action='store_true',
+                       help='Randomly sample instead of evenly-spaced selection')
+    parser.add_argument('--seed', type=int, default=42,
+                       help='Random seed for shuffle sampling (default: 42)')
     parser.add_argument('--save-every', type=int, default=10,
                        help='Save checkpoint every N rows (default: 10)')
     parser.add_argument('--truncate-to-fit', action='store_true',
@@ -67,7 +71,9 @@ def main():
             test_mode=args.test_mode,
             max_samples=args.max_samples,
             save_every=args.save_every,
-            truncate_to_fit=args.truncate_to_fit
+            truncate_to_fit=args.truncate_to_fit,
+            shuffle_samples=args.shuffle_samples,
+            seed=args.seed
         )
 
     except Exception as e:

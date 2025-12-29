@@ -131,7 +131,7 @@ class BaseProvider(ABC):
 
         return success_count
 
-    def main(self, input_path: str, output_path: str, input_column: str, output_column: str, model_name: str, max_context_length: int, max_tokens_per_minute: int, test_mode: bool = False, max_samples: int = None, save_every: int = 10, max_retries: int = 2, truncate_to_fit: bool = False) -> None:
+    def main(self, input_path: str, output_path: str, input_column: str, output_column: str, model_name: str, max_context_length: int, max_tokens_per_minute: int, test_mode: bool = False, max_samples: int = None, save_every: int = 10, max_retries: int = 2, truncate_to_fit: bool = False, shuffle_samples: bool = False, seed: int = 42) -> None:
         # Ensure output directory exists
         output_dir = os.path.dirname(output_path) or "results"
         os.makedirs(output_dir, exist_ok=True)
@@ -150,11 +150,20 @@ class BaseProvider(ABC):
             n_samples = max_samples if max_samples else self._get_default_test_samples()
 
             if len(input_df) > n_samples:
-                # Stratified sampling - evenly distributed across dataset
-                indices = np.linspace(0, len(input_df)-1, n_samples, dtype=int)
+                if shuffle_samples:
+                    # Random sampling with seed for reproducibility
+                    rng = np.random.default_rng(seed)
+                    indices = rng.choice(len(input_df), size=n_samples, replace=False)
+                    indices = np.sort(indices)  # Sort for consistent ordering in output
+                    sampling_method = f"random (seed={seed})"
+                else:
+                    # Stratified sampling - evenly distributed across dataset
+                    indices = np.linspace(0, len(input_df)-1, n_samples, dtype=int)
+                    sampling_method = "stratified"
+
                 input_df = input_df.iloc[indices].copy()
                 input_df = input_df.reset_index(drop=True)
-                print(f"{'Test mode' if test_mode else 'Sampling'}: Selected {len(input_df)} from {original_size} rows")
+                print(f"{'Test mode' if test_mode else 'Sampling'}: Selected {len(input_df)} from {original_size} rows ({sampling_method})")
 
         # Apply safety margin for tokenizer variance (e.g., GPT-OSS uses 0.85)
         safety_margin = self.get_context_safety_margin()
