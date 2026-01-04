@@ -48,11 +48,13 @@ We ran the same experiments on **models released after the paper** — specifica
 
 ### NIAH Results — Needle Retrieval
 
+<!-- NIAH heatmaps (uncomment when images are added to images/ folder)
 <p align="center">
-  <img src="results/gpt_oss_20b_niah_heatmap.png" width="48%" />
-  <img src="results/gpt_oss_120b_niah_heatmap.png" width="48%" />
+  <img src="images/gpt_oss_20b_niah_heatmap.png" width="48%" />
+  <img src="images/gpt_oss_120b_niah_heatmap.png" width="48%" />
 </p>
 <p align="center"><em>Left: GPT-OSS 20B (8.2% overall). Right: GPT-OSS 120B (28.2% overall).</em></p>
+-->
 
 | Model | NIAH Accuracy | Notes |
 |-------|---------------|-------|
@@ -65,8 +67,8 @@ We ran the same experiments on **models released after the paper** — specifica
 ### LongMemEval Results — Retrieval Cost
 
 <p align="center">
-  <img src="results/gpt_oss_20b_longmemeval.png" width="48%" />
-  <img src="results/gpt_oss_120b_longmemeval.png" width="48%" />
+  <img src="images/gpt_oss_20b_longmemeval.png" width="48%" />
+  <img src="images/gpt_oss_120b_longmemeval.png" width="48%" />
 </p>
 <p align="center"><em>Left: GPT-OSS 20B (85% → 27%). Right: GPT-OSS 120B (78% → 36%).</em></p>
 
